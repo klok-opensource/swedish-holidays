@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!/gradlew
+!/gradlew.bat
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# IntelliJ IDEA
+*.iml
+.idea/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+build/logs/
+
+# Java
+*.class
+
+# Other
+out/
