@@ -1,10 +1,10 @@
-# Klok Holidays Utility Library
+# Klok Swedish Holidays Utility Library
 
 A lightweight Java library (Java 8+ compatible) providing utilities to determine Swedish public holidays.
 
 ## Features
 
-- Check if a given date is a holiday (`LocalDate`, `java.sql.Date`, `Instant`, `Timestamp` overloads).
+- Check if a given date is a holiday (`LocalDate`, `java.sql.Date`, `Instant`, `Timestamp`, `XMLGregorianCalendar` overloads).
 - Get a list of all holidays for a specific year or current year (Swedish and English names).
 - `isHolidayToday()` to check if today is a Swedish holiday (Stockholm timezone).
 
@@ -26,9 +26,12 @@ import dev.klok.holidays.Holiday;
 import java.time.*;
 import java.sql.Date;
 import java.sql.Timestamp;
+import javax.xml.datatype.DatatypeFactory;
+import javax.xml.datatype.DatatypeConstants;
+import javax.xml.datatype.XMLGregorianCalendar;
 
 public class HolidayDemo {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         // 1. Check if today is a holiday
         boolean todayHoliday = SwedishHolidays.isHolidayToday();
         System.out.println("Today is holiday? " + todayHoliday);
@@ -50,6 +53,11 @@ public class HolidayDemo {
         Timestamp ts = Timestamp.from(LocalDate.of(2025, 12, 25)
                 .atStartOfDay(ZoneId.of("Europe/Stockholm")).toInstant());
         System.out.println("Christmas (Timestamp): " + SwedishHolidays.isHoliday(ts));
+
+        // 5. Using XMLGregorianCalendar
+        XMLGregorianCalendar xmlCal = DatatypeFactory.newInstance()
+                .newXMLGregorianCalendarDate(2025, 1, 1, DatatypeConstants.FIELD_UNDEFINED);
+        System.out.println("New Year's Day (XMLGregorianCalendar): " + SwedishHolidays.isHoliday(xmlCal));
     }
 }
 ```
