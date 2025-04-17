@@ -1,0 +1,110 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'org.jreleaser' version '1.17.0'
+}
+
+group = 'dev.klok.holidays'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+    withSourcesJar()
+    withJavadocJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// JReleaser configuration for signing & deployment
+jreleaser {
+    signing {
+        active = 'ALWAYS'
+        armored = true
+    }
+    deploy {
+        maven {
+            nexus2 {
+                'maven-central' {
+                    active = 'ALWAYS'
+                    url = 'https://s01.oss.sonatype.org/service/local'
+                    snapshotUrl = 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
+                    closeRepository = true    // set to false first time if you want manual release
+                    releaseRepository = true
+                    stagingRepository('build/staging-deploy')
+                }
+            }
+            /* Portal Publisher API example:
+            mavenCentral {
+                sonatype {
+                    active = 'ALWAYS'
+                    url = 'https://central.sonatype.com/api/v1/publisher'
+                    stagingRepository('build/staging-deploy')
+                }
+            }
+            */
+        }
+    }
+}
+
+// Publishing configuration for Maven Central
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = 'klok-holidays'
+            from components.java
+            pom {
+                name = "Klok Holidays Utility Library"
+                description = "A lightweight Java library providing utilities to determine Swedish public holidays."
+                url = "https://github.com/klok-opensource/swedish-holidays"
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "jakobthun"
+                        name = "Jakob Thun"
+                        email = "jakob.thun@integrera.com"
+                    }
+                }
+                scm {
+                    connection = "scm:git:git://github.com/klok-opensource/klok-holidays.git"
+                    developerConnection = "scm:git:ssh://github.com/klok-opensource/klok-holidays.git"
+                    url = "https://github.com/klok-opensource/klok-holidays"
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'OSSRH'
+            url = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
+            credentials {
+                username = project.findProperty('ossrhUsername') ?: System.getenv('OSSRH_USERNAME')
+                password = project.findProperty('ossrhPassword') ?: System.getenv('OSSRH_PASSWORD')
+            }
+        }
+    }
+}
+
+// Sign the published artifacts
+signing {
+    useGpgCmd()
+    sign publishing.publications.mavenJava
+}
