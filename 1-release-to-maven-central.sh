@@ -1,1 +1,1 @@
-gradle clean jreleaserConfig publish jreleaserFullRelease
+gradle clean build jreleaserConfig publish jreleaserFullRelease

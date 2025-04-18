@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'dev.klok.holidays'
-version = '1.0.2'
+version = '1.0.3'
 
 java {
     toolchain {
@@ -41,6 +41,8 @@ jreleaser {
                     active = 'ALWAYS'
                     url = 'https://central.sonatype.com/api/v1/publisher'
                     stagingRepository('build/staging-deploy')
+                    maxRetries = 90
+                    retryDelay = 20
                 }
             }
         }
