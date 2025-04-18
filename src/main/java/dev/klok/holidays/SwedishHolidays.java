@@ -15,6 +15,7 @@ public class SwedishHolidays {
     private static final Logger logger = Logger.getLogger(SwedishHolidays.class.getName());
 
     public enum Lang { SE, EN }
+    private static Lang defaultLang = Lang.EN;
 
     public static boolean isHoliday(LocalDate date) {
         return listHolidays(Lang.EN).stream()
@@ -100,11 +101,11 @@ public class SwedishHolidays {
     }
 
     public static List<Holiday> listHolidays() {
-        return listHolidays(Lang.SE);
+        return listHolidays(defaultLang);
     }
 
     public static List<Holiday> listHolidays(int year) {
-        return listHolidays(Lang.SE, year);
+        return listHolidays(defaultLang, year);
     }
 
     public static List<Holiday> listHolidays(Lang lang, int year) {
