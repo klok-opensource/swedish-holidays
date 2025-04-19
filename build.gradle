@@ -7,6 +7,8 @@ plugins {
 group = 'dev.klok.holidays'
 version = '1.0.3'
 
+def junitTestVersion = '5.8.2'
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(8)
@@ -20,8 +22,9 @@ repositories {
 }
 
 dependencies {
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:' + junitTestVersion
+    testImplementation 'org.junit.jupiter:junit-jupiter-params:' + junitTestVersion
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:' + junitTestVersion
 }
 
 test {
@@ -59,7 +62,7 @@ publishing {
             from components.java
             pom {
                 name = "Klok Swedish Holidays Utility Library"
-                description = "A lightweight Java library providing utilities to determine Swedish public holidays."
+                description = "A lightweight Java library providing utilities to determine Swedish standard non-working days."
                 url = "https://github.com/klok-opensource/swedish-holidays"
                 licenses {
                     license {
