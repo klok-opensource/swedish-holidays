@@ -25,6 +25,10 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-api:' + junitTestVersion
     testImplementation 'org.junit.jupiter:junit-jupiter-params:' + junitTestVersion
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:' + junitTestVersion
+
+    /// JMH dependencies (use latest versions)
+    testImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    testAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
 }
 
 test {

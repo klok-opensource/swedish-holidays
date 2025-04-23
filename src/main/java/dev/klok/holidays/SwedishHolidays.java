@@ -867,27 +867,40 @@ public final class SwedishHolidays {
      * @return Easter Sunday date in the specified year
      */
     private static LocalDate calculateEaster(int year) {
+
         if (year <= 0) {
             throw new IllegalArgumentException("Year must be positive to calculate Easter.");
         }
-        // Anonymous Gregorian algorithm (Meeus/Jones/Butcher)
-        int a = year % 19;
-        int b = year / 100;
-        int c = year % 100;
-        int d = b / 4;
-        int e = b % 4;
-        int f = (b + 8) / 25;
-        int g = (b - f + 1) / 3;
-        int h = (19 * a + b - d - g + 15) % 30;
-        int i = c / 4;
-        int k = c % 4;
-        int l = (32 + 2 * e + 2 * i - h - k) % 7;
-        int m = (a + 11 * h + 22 * l) / 451;
-        int month = (h + l - 7 * m + 114) / 31;
-        int day = ((h + l - 7 * m + 114) % 31) + 1;
+
+        int goldenNumber = year % 19;                // Position in 19-year Metonic cycle
+        int century = year / 100;                    // Century number
+        int yearOfCentury = year % 100;              // Year within the century
+
+        int centuryDiv4 = century / 4;               // Century divided by 4
+        int centuryRemainder = century % 4;          // Remainder of century/4
+
+        int correction = (century + 8) / 25;         // Solar correction
+        int lunarCorrection = (century - correction + 1) / 3; // Lunar correction
+
+        // paschalFullMoon: number of days from March 21 to the paschal full moon
+        int paschalFullMoon = (19 * goldenNumber + century - centuryDiv4 - lunarCorrection + 15) % 30;
+
+        int yearOfCenturyDiv4 = yearOfCentury / 4;    // Year-of-century divided by 4
+        int yearOfCenturyRemainder = yearOfCentury % 4;
+
+        // weekday: offset to the next Sunday
+        int weekday = (32 + 2 * centuryRemainder + 2 * yearOfCenturyDiv4 - paschalFullMoon - yearOfCenturyRemainder) % 7;
+
+        // advance: additional correction based on lunar cycle
+        int advance = (goldenNumber + 11 * paschalFullMoon + 22 * weekday) / 451;
+
+        // month and day calculation: March is 3, April is 4
+        int month = (paschalFullMoon + weekday - 7 * advance + 114) / 31;
+        int day   = ((paschalFullMoon + weekday - 7 * advance + 114) % 31) + 1;
 
         return LocalDate.of(year, month, day);
     }
+
 
     /**
      * Finds the first occurrence of a specific day of the week within a date range
