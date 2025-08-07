@@ -10,11 +10,27 @@ version = '1.1.0'
 def junitTestVersion = '5.8.2'
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(8)
-    }
     withSourcesJar()
     withJavadocJar()
+}
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.debug = false // reduce classfile size
+}
+
+tasks.withType(Jar).configureEach {
+    // Reproducible jars: stable ordering and timestamps
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    // Minimal manifest
+    manifest.attributes(
+            'Implementation-Title': 'swedish-holidays',
+            'Implementation-Version': project.version
+    )
 }
 
 repositories {
@@ -26,13 +42,16 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-params:' + junitTestVersion
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:' + junitTestVersion
 
-    /// JMH dependencies (use latest versions)
+    /// JMH dependencies (avoid on main classpath)
     testImplementation 'org.openjdk.jmh:jmh-core:1.37'
     testAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
 }
 
 test {
     useJUnitPlatform()
+    jvmArgs = [
+            '-XX:+UseStringDeduplication'
+    ]
 }
 
 // JReleaser configuration for signing & deployment

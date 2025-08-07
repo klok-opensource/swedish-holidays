@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList; // Thread-safe list
 import java.util.concurrent.CopyOnWriteArraySet;  // Thread-safe set
+import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.stream.Collectors;
 
 /**
@@ -36,10 +37,13 @@ public final class SwedishHolidays {
     private static final ZoneId SWEDEN = ZoneId.of("Europe/Stockholm");
     private static Lang defaultLang = Lang.EN;
 
-    // Nested cache for holidays per year and language
-    private static final ConcurrentMap<Integer, ConcurrentMap<Lang, List<Holiday>>> holidayListCachePerLang = new ConcurrentHashMap<>();
+    // Nested cache for holidays per year and language (index by Lang.ordinal())
+    private static final ConcurrentMap<Integer, AtomicReferenceArray<List<Holiday>>> holidayListCachePerLang = new ConcurrentHashMap<>();
     // Date cache per year for quick holiday lookup (contains final, customized dates)
     private static final ConcurrentMap<Integer, Set<LocalDate>> holidayDateCache = new ConcurrentHashMap<>();
+
+    // Cache Easter date per year to avoid recomputation
+    private static final ConcurrentMap<Integer, LocalDate> easterCache = new ConcurrentHashMap<>();
 
     // --- Customization Fields ---
     private static final List<Holiday> customAdditions = new CopyOnWriteArrayList<>();
@@ -51,23 +55,7 @@ public final class SwedishHolidays {
     // Prevent instantiation
     private SwedishHolidays() {}
 
-    // Static initializer for pre-populating cache
-    static {
-        // Pre-populate the cache with holidays for common years
-        int currentYear = LocalDate.now(SWEDEN).getYear();
-        populateCacheForYear(currentYear - 1); // Previous
-        populateCacheForYear(currentYear);     // Current
-        populateCacheForYear(currentYear + 1); // Next
-        populateCacheForYear(currentYear + 2); // Second next
-    }
-
-    // Helper to avoid code duplication in static block
-    private static void populateCacheForYear(int year) {
-        // Getting the list triggers calculation and caching for both languages
-        // and the date-only cache
-        listHolidays(Lang.SE, year);
-        listHolidays(Lang.EN, year);
-    }
+    // --- Removed eager static prepopulation to reduce class-load time ---
 
     //
     // --- CONFIGURATION METHODS ---
@@ -209,9 +197,7 @@ public final class SwedishHolidays {
     public static void clearCache() {
         holidayListCachePerLang.clear();
         holidayDateCache.clear();
-        // Optional: Re-pre-populate cache here if desired, but lazy loading is often sufficient.
-        // Consider adding back the pre-population calls if clearing is frequent.
-        // populateCacheForYear(LocalDate.now(SWEDEN).getYear()); // etc.
+        // Easter cache can remain, it's independent of customizations
     }
 
     // --- END CONFIGURATION METHODS ---
@@ -417,11 +403,11 @@ public final class SwedishHolidays {
      */
     public static List<Holiday> listHolidays(Lang lang, int year) {
         Objects.requireNonNull(lang, "Language cannot be null");
-        ConcurrentMap<Lang, List<Holiday>> perLangMap =
-                holidayListCachePerLang.computeIfAbsent(year, y -> new ConcurrentHashMap<>());
+        AtomicReferenceArray<List<Holiday>> perLangArray =
+                holidayListCachePerLang.computeIfAbsent(year, y -> new AtomicReferenceArray<>(Lang.values().length));
 
         // Check cache first
-        List<Holiday> cachedHolidays = perLangMap.get(lang);
+        List<Holiday> cachedHolidays = perLangArray.get(lang.ordinal());
         if (cachedHolidays != null) {
             return cachedHolidays;
         }
@@ -430,20 +416,24 @@ public final class SwedishHolidays {
         List<Holiday> holidays = calculateAndCustomizeHolidaysForYear(year, lang);
 
         // Populate date-only cache (using the *final* list of dates)
-        // Use computeIfAbsent to avoid race conditions if multiple threads calculate for the same year
-        // This should happen only once per year, regardless of language requested first
-        holidayDateCache.computeIfAbsent(year, y ->
-                holidays.stream()
-                        .map(Holiday::getDate)
-                        .collect(Collectors.toSet()) // Collect to a Set for fast lookups
-        );
+        holidayDateCache.computeIfAbsent(year, y -> {
+            // Use HashSet for O(1) lookups
+            Set<LocalDate> set = new HashSet<>(holidays.size() * 2);
+            for (Holiday h : holidays) {
+                set.add(h.getDate());
+            }
+            return set;
+        });
 
         // Populate the list cache for the specific language
         List<Holiday> unmodifiableHolidays = Collections.unmodifiableList(holidays);
-        // Use putIfAbsent for the language-specific cache to avoid overwriting if another thread just finished
-        List<Holiday> existing = perLangMap.putIfAbsent(lang, unmodifiableHolidays);
+        // Only set if still absent to avoid overwriting another thread's result
+        if (!perLangArray.compareAndSet(lang.ordinal(), null, unmodifiableHolidays)) {
+            // Another thread beat us; use their value
+            return perLangArray.get(lang.ordinal());
+        }
 
-        return (existing != null) ? existing : unmodifiableHolidays;
+        return unmodifiableHolidays;
     }
 
     /**
@@ -781,32 +771,42 @@ public final class SwedishHolidays {
         // 1. Calculate Standard Holidays
         List<Holiday> standardHolidays = calculateStandardHolidaysForYear(year, lang);
 
+        // Prepare capacity hint to reduce reallocations
+        int expectedSize = standardHolidays.size() + Math.min(customAdditions.size(), 8) + Math.min(customRules.size(), 8);
+        List<Holiday> filteredHolidays = new ArrayList<>(Math.max(expectedSize, standardHolidays.size()));
+
         // 2. Apply Removals (Filter out standard holidays marked for removal)
-        List<Holiday> filteredHolidays = standardHolidays.stream()
-                .filter(h -> !standardRemovals.contains(h.getDate()))
-                .collect(Collectors.toList()); // Collect into a mutable list
+        if (standardRemovals.isEmpty()) {
+            filteredHolidays.addAll(standardHolidays);
+        } else {
+            for (Holiday h : standardHolidays) {
+                if (!standardRemovals.contains(h.getDate())) {
+                    filteredHolidays.add(h);
+                }
+            }
+        }
 
         // 3. Apply Fixed Custom Additions (only those matching the year)
-        customAdditions.stream()
-                .filter(h -> h.getDate().getYear() == year)
-                // Consider language handling for fixed additions if needed
-                // (Current implementation just adds them as defined)
-                .forEach(filteredHolidays::add);
+        if (!customAdditions.isEmpty()) {
+            for (Holiday h : customAdditions) {
+                if (h.getDate().getYear() == year) {
+                    filteredHolidays.add(h);
+                }
+            }
+        }
 
         // 4. Apply Rule-Based Custom Additions
-        customRules.stream()
-                .map(rule -> rule.calculateHoliday(year, lang)) // Evaluate rule
-                .filter(Objects::nonNull)                      // Filter out null results (rule didn't apply)
-                .forEach(filteredHolidays::add);               // Add the calculated holiday
+        if (!customRules.isEmpty()) {
+            for (HolidayRule rule : customRules) {
+                Holiday h = rule.calculateHoliday(year, lang);
+                if (h != null) {
+                    filteredHolidays.add(h);
+                }
+            }
+        }
 
         // 5. Sort the final combined list by date
         filteredHolidays.sort(Comparator.comparing(Holiday::getDate));
-
-        // Optional: Remove duplicates if rules or additions might overlap with standard holidays
-        // This requires Holiday to have a good equals/hashCode implementation (added).
-        // If duplicates are possible and unwanted:
-        // List<Holiday> distinctHolidays = filteredHolidays.stream().distinct().collect(Collectors.toList());
-        // return distinctHolidays;
 
         return filteredHolidays; // Return the final, sorted list
     }
@@ -862,6 +862,7 @@ public final class SwedishHolidays {
     /**
      * Calculates the date of Easter Sunday for a given year using the
      * Anonymous Gregorian algorithm (Meeus/Jones/Butcher algorithm).
+     * The result is cached per year.
      *
      * @param year the year to calculate Easter for (must be positive)
      * @return Easter Sunday date in the specified year
@@ -870,6 +871,12 @@ public final class SwedishHolidays {
 
         if (year <= 0) {
             throw new IllegalArgumentException("Year must be positive to calculate Easter.");
+        }
+
+        // Fast-path: cached
+        LocalDate cached = easterCache.get(year);
+        if (cached != null) {
+            return cached;
         }
 
         int goldenNumber = year % 19;                // Position in 19-year Metonic cycle
@@ -898,7 +905,9 @@ public final class SwedishHolidays {
         int month = (paschalFullMoon + weekday - 7 * advance + 114) / 31;
         int day   = ((paschalFullMoon + weekday - 7 * advance + 114) % 31) + 1;
 
-        return LocalDate.of(year, month, day);
+        LocalDate result = LocalDate.of(year, month, day);
+        easterCache.putIfAbsent(year, result);
+        return result;
     }
 
 
